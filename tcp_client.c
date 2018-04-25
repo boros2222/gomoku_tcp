@@ -62,6 +62,7 @@ int main (int argc, char *argv[]) {
 	}
 
 	int network_socket;
+	char on = 1;
 	network_socket = socket(AF_INET, SOCK_STREAM, 0);
 
 	char server_addr[16];
@@ -71,100 +72,127 @@ int main (int argc, char *argv[]) {
 	server_address.sin_port = htons(PORT);
 	server_address.sin_addr.s_addr = inet_addr(server_addr);
 
+	setsockopt(network_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof on);
+	setsockopt(network_socket, SOL_SOCKET, SO_KEEPALIVE, (char *)&on, sizeof on);
+
 	int connection_status = connect(network_socket, (struct sockaddr *) &server_address, sizeof(server_address));
 
 	if (connection_status < 0) {
-		printf("There was an error making a connection to the server! (error %d)\n", connection_status);
+		printf("There was an error making a connection to the server!\n");
 		return 1;
 	}
 
-	char server_response[SIZE];
+	char message[SIZE];
 	char command[100];
 
-	recv(network_socket, &server_response, sizeof(server_response), 0);
-	if (strcmp(server_response, "wait") == 0) {
+	recv(network_socket, &message, sizeof(message), 0);
+	if (strcmp(message, "wait") == 0) {
 		printf("Waiting for a player!\n");
-		recv(network_socket, &server_response, sizeof(server_response), 0);
+		recv(network_socket, &message, sizeof(message), 0);
 	}
 
-	while (strcmp(server_response,"start") == 0)
+	while (strcmp(message,"start") == 0)
 	{
 		do {
-			recv(network_socket, &server_response, sizeof(server_response), 0);
+			recv(network_socket, &message, sizeof(message), 0);
 
-			if (strcmp(server_response, "table") == 0) {
-				recv(network_socket, &server_response, sizeof(server_response), 0);
+			if (strcmp(message, "table") == 0) {
+				recv(network_socket, &message, sizeof(message), 0);
 				system("clear");
-				draw_table(server_response);
+				draw_table(message);
 			}
-			else if (strcmp(server_response, "turn") == 0) {
+			else if (strcmp(message, "turn") == 0) {
 				printf("Your turn!\n");
-				printf("Command: ");
-				scanf("%s", command);
 
-				if (strcmp(command, "feladom") == 0) {
-					sprintf(server_response, "give_up");
-					send(network_socket, server_response, sizeof(server_response), 0);
-				}
-				else {
+				do {
 					do {
-						while(!check_format(command)) {
+						printf("Command: ");
+						scanf("%s", command);
+
+						if (strcmp(command,"feladom") != 0 && !check_format(command))
 							printf("Wrong format! Usage: \"(number,number)\"\n");
-							printf("Command: ");
-							scanf("%s", command);
-						}
 
-						sprintf(server_response, "%s", command);
-						send(network_socket, server_response, sizeof(server_response), 0);
+					} while (strcmp(command,"feladom") != 0 && !check_format(command));
 
-						recv(network_socket, &server_response, sizeof(server_response), 0);
+					if (strcmp(command, "feladom") == 0) {
+						sprintf(message, "give_up");
+						send(network_socket, message, sizeof(message), 0);
+					}
+					else if (strcmp(command, "feladom") != 0) {
+						sprintf(message, "%s", command);
+						send(network_socket, message, sizeof(message), 0);
 
-						if (strcmp(server_response, "illegal") == 0) {
+						recv(network_socket, &message, sizeof(message), 0);
+
+						if (strcmp(message, "illegal") == 0)
 							printf("Illegal move!\n");
-							printf("Command: ");
-							scanf("%s", command);
-						}
-					} while (strcmp(server_response, "ok") != 0);
-				}
+					}
+				} while (strcmp(message, "ok") != 0 && strcmp(command, "feladom") != 0);
 			}
-			else if (strcmp(server_response, "no_turn") == 0) {
+			else if (strcmp(message, "no_turn") == 0) {
 				printf("Other player's turn!\n");
 			}
-			else if (strcmp(server_response, "winner") == 0) {
-				printf("You are the winner!\n");
+			else if (strcmp(message, "winner") == 0) {
+				printf("You won!\n");
 			}
-			else if (strcmp(server_response, "loser") == 0) {
-				printf("You are the loser!\n");
+			else if (strcmp(message, "loser") == 0) {
+				printf("You lost!\n");
 			}
-			else if (strcmp(server_response, "you_give_up") == 0) {
+			else if (strcmp(message, "tie") == 0) {
+				printf("Tie! No winner!\n");
+			}
+			else if (strcmp(message, "you_give_up") == 0) {
 				printf("You gave up!\n");
 			}
-			else if (strcmp(server_response, "other_give_up") == 0) {
+			else if (strcmp(message, "other_give_up") == 0) {
 				printf("Other player gave up!\n");
 			}
-			else if (strcmp(server_response, "end") == 0) {
+			else if (strcmp(message, "end") == 0) {
 				printf("Ending game...\n");
 			}
-		} while (strcmp(server_response, "end") != 0);
+		} while (strcmp(message, "end") != 0);
 		
-		printf("Replay?\nCommand: ");
+		printf("Replay? (ujra)\nCommand: ");
 		scanf("%s", command);
 
 		if (strcmp(command,"ujra") == 0) {
-			sprintf(server_response, "replay");
-			send(network_socket, server_response, sizeof(server_response), 0);
+			sprintf(message, "replay");
+			send(network_socket, message, sizeof(message), 0);
 		}
 		else {
-			sprintf(server_response, "exit");
-			send(network_socket, server_response, sizeof(server_response), 0);
+			sprintf(message, "exit");
+			send(network_socket, message, sizeof(message), 0);
 		}
 
-		recv(network_socket, &server_response, sizeof(server_response), 0);
+		recv(network_socket, &message, sizeof(message), 0);
 
-		if (strcmp(server_response,"close") == 0)
+		if (strcmp(message, "swap") == 0) {
+			printf("Swap symbols? (igen)\nCommand: ");
+			scanf("%s", command);
+
+			if (strcmp(command, "igen") == 0) {
+				sprintf(message, "swap_yes");
+				send(network_socket, message, sizeof(message), 0);
+			}
+			else {
+				sprintf(message, "swap_no");
+				send(network_socket, message, sizeof(message), 0);
+			}
+
+			recv(network_socket, &message, sizeof(message), 0);
+			if (strcmp(message, "swapped") == 0)
+				printf("Symbols swapped!\n");
+			else if (strcmp(message, "not_swapped") == 0)
+				printf("No agreement! Symbols are not swapped!\n");
+
+			recv(network_socket, &message, sizeof(message), 0);
+
+			sleep(2);
+		}
+		else if (strcmp(message,"close") == 0)
 			printf("Game closed!\n");
-		else if (strcmp(server_response,"no_replay") == 0)
-			printf("No replay! Game closed!\n");
+		else if (strcmp(message,"no_replay") == 0)
+			printf("No agreement! Game closed!\n");
 	}
 	
 

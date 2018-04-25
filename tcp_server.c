@@ -30,54 +30,58 @@ int check_for_win (char* table) {
 			if (player == '0')
 				continue;
 
-			if (y + 3 < WIDTH &&
+			if (y + 4 < WIDTH &&
 			player == table[x + 10*(y+1)] &&
 			player == table[x + 10*(y+2)] &&
 			player == table[x + 10*(y+3)] &&
 			player == table[x + 10*(y+4)])
-				if (player == 'X') return 0; else return 1;
+				return (player == 'X' ? 0 : 1);
 
-			if (x + 3 < HEIGHT) {
+			if (x + 4 < HEIGHT) {
 				if (player == table[x+1 + 10*y] &&
 				player == table[x+2 + 10*y] &&
 				player == table[x+3 + 10*y] &&
 				player == table[x+4 + 10*y])
-					if (player == 'X') return 0; else return 1;
+					return (player == 'X' ? 0 : 1);
 
-				if (y + 3 < WIDTH &&
+				if (y + 4 < WIDTH &&
 				player == table[x+1 + 10*(y+1)] &&
 				player == table[x+2 + 10*(y+2)] &&
 				player == table[x+3 + 10*(y+3)] &&
 				player == table[x+4 + 10*(y+4)])
-					if (player == 'X') return 0; else return 1;
+					return (player == 'X' ? 0 : 1);
 
-				if (y - 3 >= 0 &&
+				if (y - 4 >= 0 &&
 				player == table[x+1 + 10*(y-1)] &&
 				player == table[x+2 + 10*(y-2)] &&
 				player == table[x+3 + 10*(y-3)] &&
 				player == table[x+4 + 10*(y-4)])
-					if (player == 'X') return 0; else return 1;
+					return (player == 'X' ? 0 : 1);
 			}
 		}
 	}
 
-	return -1;
+	for (int i = 0; i < HEIGHT*WIDTH; i++)
+		if (table[i] == '0')
+			return -1;
+
+	return 2;
 }
 
-void getxy (char* message, int* x, int* y) {
+void getxy (char* str, int* x, int* y) {
 	char temp[10];
-	int i,j;
+	int i, j;
 
-	for (i = 0; message[i] != ','; ++i);
+	for (i = 0; str[i] != ','; ++i);
 
 	for (j = 1; j < i; ++j)
-		temp[j-1] = message[j];
+		temp[j-1] = str[j];
 
 	temp[j-1] = '\0';
 	*x = atoi(temp);
 		
-	for (j = i+1; message[j] != ')'; ++j)
-		temp[j-i-1] = message[j];
+	for (j = i+1; str[j] != ')'; ++j)
+		temp[j-i-1] = str[j];
 
 	temp[j-i-1] = '\0';
 	*y = atoi(temp);
@@ -88,7 +92,7 @@ int main (int argc, char *argv[]) {
 	int clients[2] = {0, 0};
 	int num_of_clients = 0;
 
-	char server_message[SIZE];
+	char message[SIZE];
 	char on = 1;
 
 	int server_socket;
@@ -102,8 +106,8 @@ int main (int argc, char *argv[]) {
 	struct sockaddr_in clients_address[2];
 	unsigned int clients_address_size[2];
 
-	//setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof on);
-	//setsockopt(server_socket, SOL_SOCKET, SO_KEEPALIVE, (char *)&on, sizeof on);
+	setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof on);
+	setsockopt(server_socket, SOL_SOCKET, SO_KEEPALIVE, (char *)&on, sizeof on);
 
 	bind(server_socket, (struct sockaddr*) &server_address, sizeof(server_address));
 
@@ -115,14 +119,14 @@ int main (int argc, char *argv[]) {
 		clients[i] = accept(server_socket, (struct sockaddr *) &(clients_address[i]), &(clients_address_size[i]));
 
 		if (i == 0) {
-			sprintf(server_message, "wait");
-			send(clients[i], server_message, sizeof(server_message), 0);
+			sprintf(message, "wait");
+			send(clients[i], message, sizeof(message), 0);
 			printf("Player 1 joined!\n");
 		}
 		else if (i == 1) {
-			sprintf(server_message, "start");
-			send(clients[i], server_message, sizeof(server_message), 0);
-			send(clients[i-1], server_message, sizeof(server_message), 0);
+			sprintf(message, "start");
+			send(clients[i], message, sizeof(message), 0);
+			send(clients[i-1], message, sizeof(message), 0);
 			printf("Player 2 joined!\n");
 		}
 	}
@@ -137,10 +141,10 @@ int main (int argc, char *argv[]) {
 			table[i] = '0';
 
 		for (int i = 0; i < 2; ++i) {
-			sprintf(server_message, "table");
-			send(clients[i], server_message, sizeof(server_message), 0);
+			sprintf(message, "table");
+			send(clients[i], message, sizeof(message), 0);
 
-			send(clients[i], table, sizeof(server_message), 0);
+			send(clients[i], table, sizeof(message), 0);
 		}
 
 		int turn = 0;
@@ -149,120 +153,159 @@ int main (int argc, char *argv[]) {
 		bool give_up = false;
 		int winner = -1;
 
-		while (winner == -1 || !give_up) {
-			sprintf(server_message,"no_turn");
-			send(clients[inv(turn)], server_message, sizeof(server_message), 0);
+		while (winner == -1 && !give_up) {
+			sprintf(message,"no_turn");
+			send(clients[inv(turn)], message, sizeof(message), 0);
 
-			sprintf(server_message,"turn");
-			send(clients[turn], server_message, sizeof(server_message), 0);
+			sprintf(message,"turn");
+			send(clients[turn], message, sizeof(message), 0);
+			
+			do {
+				recv(clients[turn], &message, sizeof(message), 0);
+				
+				if (strcmp(message, "give_up") == 0) {
+					give_up = true;
+					sprintf(message,"you_give_up");
+					send(clients[turn], message, sizeof(message), 0);
+					sprintf(message,"other_give_up");
+					send(clients[inv(turn)], message, sizeof(message), 0);
 
-			recv(clients[turn], &server_message, sizeof(server_message), 0);
-		
-			if (strcmp(server_message,"give_up") == 0) {
-				give_up = true;
-				sprintf(server_message,"you_give_up");
-				send(clients[turn], server_message, sizeof(server_message), 0);
-				sprintf(server_message,"other_give_up");
-				send(clients[inv(turn)], server_message, sizeof(server_message), 0);
-
-				for (int i = 0; i < 2; ++i) {
-					sprintf(server_message,"end");
-					send(clients[i], server_message, sizeof(server_message), 0);
+					for (int i = 0; i < 2; ++i) {
+						sprintf(message,"end");
+						send(clients[i], message, sizeof(message), 0);
+					}
+					printf("Someone gave up. Stopping game...\n");
 				}
-				printf("Someone gave up! Stopping game!\n");
-
-				break;
-			}
-			else {
-				while(!legal) {
-					getxy(server_message, &x, &y);
+				else if (strcmp(message, "give_up") != 0) {
+					getxy(message, &x, &y);
 
 					if (0 <= x && x <= 9 && 0 <= y && y <= 9) {
-						if (table[y*10 + x] == '0') {
-							sprintf(server_message,"ok");
-							send(clients[turn], server_message, sizeof(server_message), 0);
-							printf("(%d,%d): %c\n", x, y, turn == 0 ? 'X' : 'O');
-							legal = true;
-					
+						if (table[y*10 + x] == '0') {					
 							if (turn == 0)
 								table[y*10 + x] = 'X';
 							else if (turn == 1)
 								table[y*10 + x] = 'O';
+
+							legal = true;
+							sprintf(message,"ok");
+							send(clients[turn], message, sizeof(message), 0);
+							printf("(%d,%d): %c\n", x, y, turn == 0 ? 'X' : 'O');
 						}
 						else {
 							legal = false;
-							sprintf(server_message,"illegal");
-							send(clients[turn], server_message, sizeof(server_message), 0);
+							sprintf(message,"illegal");
+							send(clients[turn], message, sizeof(message), 0);
 						}
 					}
 					else {
 						legal = false;
-						sprintf(server_message,"illegal");
-						send(clients[turn], server_message, sizeof(server_message), 0);
+						sprintf(message,"illegal");
+						send(clients[turn], message, sizeof(message), 0);
 					}
-
-					if (!legal)
-						recv(clients[turn], &server_message, sizeof(server_message), 0);
 				}
-			}
+			} while (!legal && !give_up);
 
-			for (int i = 0; i < 2; ++i) {
-				sprintf(server_message, "table");
-				send(clients[i], server_message, sizeof(server_message), 0);
-
-				send(clients[i], table, sizeof(server_message), 0);
-			}
-
-			legal = false;
-			turn = inv(turn);
-
-			winner = check_for_win(table);
-			if (winner != -1) {
-				sprintf(server_message,"winner");
-				send(clients[winner], server_message, sizeof(server_message), 0);
-				sprintf(server_message,"loser");
-				send(clients[inv(winner)], server_message, sizeof(server_message), 0);
-			
+			if (!give_up) {
 				for (int i = 0; i < 2; ++i) {
-					sprintf(server_message,"end");
-					send(clients[i], server_message, sizeof(server_message), 0);
+					sprintf(message, "table");
+					send(clients[i], message, sizeof(message), 0);
+
+					send(clients[i], table, sizeof(message), 0);
 				}
+
+				legal = false;
+				turn = inv(turn);
+
+				winner = check_for_win(table);
+				if (winner != -1) {
+					if (winner != 2){
+						sprintf(message, "winner");
+						send(clients[winner], message, sizeof(message), 0);
+						sprintf(message, "loser");
+						send(clients[inv(winner)], message, sizeof(message), 0);
+
+						printf("Player %d won\n", winner+1);
+						printf("Player %d lost\n", inv(winner)+1);
+					}
+			
+					for (int i = 0; i < 2; ++i) {
+						if (winner == 2) {
+							sprintf(message, "tie");
+							send(clients[i], message, sizeof(message), 0);
+						}
+
+						sprintf(message, "end");
+						send(clients[i], message, sizeof(message), 0);
+					}
 				
-				break;
+					if (winner == 2)
+						printf("Game tie\n");
+					
+					printf("Game ended\n");
+				}
 			}
 		}
 
 		replay = false;
 		for (int i = 0; i < 2; ++i) {
-			recv(clients[i], &server_message, sizeof(server_message), 0);
+			recv(clients[i], &message, sizeof(message), 0);
 
-			if (strcmp(server_message,"replay") == 0) {
+			if (strcmp(message,"replay") == 0)
 				replay = true;
-			}
-			else if (strcmp(server_message,"exit") == 0) {
+			else if (strcmp(message,"exit") == 0)
 				exit = true;
-			}
 		}
 
 		if (!exit && replay) {
+			bool swap = true;
+
 			for (int i = 0; i < 2; ++i) {
-				sprintf(server_message,"start");
-				send(clients[i], server_message, sizeof(server_message), 0);
+				sprintf(message,"swap");
+				send(clients[i], message, sizeof(message), 0);
+			}
+
+			for (int i = 0; i < 2; ++i) {
+				recv(clients[i], &message, sizeof(message), 0);
+
+				if (strcmp(message,"swap_no") == 0)
+					swap = false;
+			}
+
+			if (swap) {
+				int temp = clients[0];
+				clients[0] = clients[1];
+				clients[1] = temp;
+
+				for (int i = 0; i < 2; ++i) {
+					sprintf(message,"swapped");
+					send(clients[i], message, sizeof(message), 0);
+				}
+			}
+			else {
+				for (int i = 0; i < 2; ++i) {
+					sprintf(message,"not_swapped");
+					send(clients[i], message, sizeof(message), 0);
+				}
+			}
+
+			for (int i = 0; i < 2; ++i) {
+				sprintf(message,"start");
+				send(clients[i], message, sizeof(message), 0);
 			}
 		}
 		else if (exit && !replay) {
 			for (int i = 0; i < 2; ++i) {
-				sprintf(server_message,"close");
-				send(clients[i], server_message, sizeof(server_message), 0);
+				sprintf(message,"close");
+				send(clients[i], message, sizeof(message), 0);
 			}
-			printf("Server closed!\n");
+			printf("Server closed\n");
 		}
 		else if (exit && replay) {
 			for (int i = 0; i < 2; ++i) {
-				sprintf(server_message,"no_replay");
-				send(clients[i], server_message, sizeof(server_message), 0);
+				sprintf(message,"no_replay");
+				send(clients[i], message, sizeof(message), 0);
 			}
-			printf("Server closed!\n");
+			printf("Server closed\n");
 		}
 	}
 
